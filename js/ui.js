@@ -4,6 +4,7 @@
   const format = n => n.toLocaleString('en-US');
   const rank = n => ({11:'J',12:'Q',13:'K',14:'A'}[n] || String(n));
   const cardText = c => rank(c.rank) + c.suit;
+  const playerName = (game, id) => game.players.find(player => player.id === id)?.name || `Player ${id + 1}`;
   let session = null, state = null, connected = false, busy = false, hide = false, offset = 0, lastTurn = '';
   try { session = JSON.parse(sessionStorage.getItem('holdem-session')); } catch { /* Storage is optional. */ }
   async function request(route, body, auth = true) {
@@ -55,8 +56,8 @@
       'Three of a Kind':'트리플','Two Pair':'투페어','One Pair':'원페어','High Card':'하이카드'};
     const pots = winningPots(game);
     const winnerIds = [...new Set(pots.flatMap(pot => pot.winners.map(winner => winner.player.id)))];
-    $('#winner-title').textContent = game.champion !== null ? `Player ${game.champion + 1} 최종 우승!`
-      : winnerIds.length === 1 ? `Player ${winnerIds[0] + 1} 승리!` : '이번 핸드의 승자';
+    $('#winner-title').textContent = game.champion !== null ? `${playerName(game, game.champion)} 최종 우승!`
+      : winnerIds.length === 1 ? `${playerName(game, winnerIds[0])} 승리!` : '이번 핸드의 승자';
     const details = $('#winner-details');
     details.replaceChildren();
     for (const pot of pots) {
@@ -95,7 +96,7 @@
     let overlap = Math.min(previousLogs.length, currentLogs.length);
     while (overlap > 0 && !previousLogs.slice(-overlap).every((log, i) => log === currentLogs[i])) overlap--;
     return currentLogs.slice(overlap).flatMap(message => {
-      const match = /^(Player \d+): (Fold|Check|Call \d+(?: · All-In)?|Raise to \d+|All-In to \d+)$/.exec(message);
+      const match = /^(.+): (Fold|Check|Call \d+(?: · All-In)?|Raise to \d+|All-In to \d+)$/.exec(message);
       if (!match) return [];
       const action = match[2];
       const kind = action.includes('All-In') ? 'allin' : action.split(' ')[0].toLowerCase();
@@ -167,7 +168,8 @@
   function render() {
     $('#connection').textContent=connected?'● 서버 연결됨':session?'연결 끊김 · 자동 재접속 중':'방을 만들거나 참가하세요';
     if(!state) return;
-    $('#room-info').textContent=`방 ${state.code} · 나: Player ${state.you+1}${state.you===state.host?' (방장)':''}`;
+    const myName = state.members.find(member => member.id === state.you)?.name || `Player ${state.you + 1}`;
+    $('#room-info').textContent=`방 ${state.code} · 나: ${myName}${state.you===state.host?' (방장)':''}`;
     // Hold the previous table until the introduction ends, including chips and win logs.
     // The authoritative server state is unchanged; this is a presentation-only delay.
     if (waitingForResult) {
@@ -182,7 +184,7 @@
     if(!g) {
       if(!$('#lobby').open) $('#lobby').showModal();
       $('#invite-code').textContent=state.code;
-      $('#lobby-members').textContent=`${state.members.length} / ${state.count}명 참가 · `+state.members.map(m=>`Player ${m.id+1}${m.online?'':' (연결 끊김)'}`).join(', ');
+      $('#lobby-members').textContent=`${state.members.length} / ${state.count}명 참가 · `+state.members.map(m=>`${m.name || `Player ${m.id+1}`}${m.online?'':' (연결 끊김)'}`).join(', ');
       $('#start-game').hidden=state.you!==state.host;
       $('#start-game').disabled=busy||!connected||state.members.length!==state.count;
       $('#lobby-hint').textContent=state.you===state.host?'모든 참가자가 입장하면 시작할 수 있습니다.':'방장이 시작하면 자동으로 이동합니다.';
@@ -196,7 +198,7 @@
     $('#current-bet').textContent=format(g.currentBet);
     $('#board').replaceChildren(...Array.from({length:5},(_,i)=>card(g.board[i],true)));
     $('#players').replaceChildren(...g.players.map(p=>{
-      const el=document.createElement('article');el.className=`player${p.id===g.actor?' active':''}${p.folded?' folded':''}${!p.inHand?' eliminated':''}`;
+      const el=document.createElement('article');el.className=`player${p.id===g.actor?' active':''}${p.id===g.actor&&p.id===state.you?' my-turn':''}${p.folded?' folded':''}${!p.inHand?' eliminated':''}`;
       line(el,`${p.name}${p.id===state.you?' · 나':''}`,'h3');
       line(el,`${format(p.chips)} CHIP`,'div').className='chips';
       line(el,`라운드 ${format(p.streetBet)} · 누적 ${format(p.totalBet)}`,'div').className='bet';
@@ -212,7 +214,7 @@
     const me=g.players[state.you];
     $('#hole-cards').replaceChildren(...me.cards.map(c=>card(hide?null:c)));
     $('#hide-cards').hidden=!me.cards.length;$('#hide-cards').textContent=hide?'내 카드 보기':'내 카드 숨기기';
-    $('#turn-title').textContent=g.finished?(g.champion!==null?`Player ${g.champion+1} 최종 우승!`:'핸드가 끝났습니다'):g.actor===state.you?'내 차례입니다':`Player ${g.actor+1}의 차례를 기다리는 중`;
+    $('#turn-title').textContent=g.finished?(g.champion!==null?`${playerName(g,g.champion)} 최종 우승!`:'핸드가 끝났습니다'):g.actor===state.you?'내 차례입니다':`${playerName(g,g.actor)}의 차례를 기다리는 중`;
     $('#controls').hidden=!g.legal;
     $('#next-hand').hidden=!g.finished||g.champion!==null||state.you!==state.host;
     $('#new-game').hidden=!g.finished||state.you!==state.host;
@@ -231,7 +233,7 @@
     $('#result').hidden=!g.finished;$('#result').replaceChildren();
     if(g.finished) {
       line($('#result'),'핸드 결과','h2');let index=0;
-      for(const r of g.results) { const label=r.refund?'반환':index++===0?'Main Pot':`Side Pot ${index-1}`;line($('#result'),`${label} ${format(r.amount)} → ${r.winners.map(id=>`Player ${id+1}`).join(' + ')} · ${r.name}`); }
+      for(const r of g.results) { const label=r.refund?'반환':index++===0?'Main Pot':`Side Pot ${index-1}`;line($('#result'),`${label} ${format(r.amount)} → ${r.winners.map(id=>playerName(g,id)).join(' + ')} · ${r.name}`); }
       for(const p of g.players.filter(p=>p.hand)) line($('#result'),`${p.name}: ${p.cards.map(cardText).join(' ')} · ${p.hand.name} · 최강 5장 ${p.hand.cards.map(cardText).join(' ')}`);
       if(state.you!==state.host) line($('#result'),'방장이 다음 핸드 또는 새 게임을 시작할 수 있습니다.');
     }
@@ -274,8 +276,8 @@
     $('#rank-toggle').textContent = expanded ? '♠ 족보 닫기' : '♠ 족보 보기 · 강한 순서';
     $('#rank-content').hidden = !expanded;
   });
-  $('#create-form').addEventListener('submit',e=>{e.preventDefault();enter('/api/create',{count:Number(new FormData(e.currentTarget).get('count'))});});
-  $('#join-form').addEventListener('submit',e=>{e.preventDefault();enter('/api/join',{code:$('#room-code').value.trim().toUpperCase()});});
+  $('#create-form').addEventListener('submit',e=>{e.preventDefault();enter('/api/create',{count:Number(new FormData(e.currentTarget).get('count')),nickname:$('#nickname').value});});
+  $('#join-form').addEventListener('submit',e=>{e.preventDefault();enter('/api/join',{code:$('#room-code').value.trim().toUpperCase(),nickname:$('#nickname').value});});
   $('#start-game').addEventListener('click',()=>command('start'));$('#next-hand').addEventListener('click',()=>command('next'));$('#new-game').addEventListener('click',()=>command('reset'));
   document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>command('act',{action:b.dataset.action})));
   $('#raise-form').addEventListener('submit',e=>{e.preventDefault();command('act',{action:'raise',amount:Number($('#raise-amount').value)});});

@@ -50,8 +50,8 @@ function createServer(options = {}) {
         try { body = JSON.parse(raw); } catch { send(res, 400, {error: '잘못된 JSON입니다.'}); return; }
         if (!body || typeof body !== 'object' || Array.isArray(body)) { send(res, 400, {error: '잘못된 요청입니다.'}); return; }
       }
-      if (req.method === 'POST' && url.pathname === '/api/create') { send(res, 201, rooms.create(body.count)); return; }
-      if (req.method === 'POST' && url.pathname === '/api/join') { send(res, 201, rooms.join(body.code)); return; }
+      if (req.method === 'POST' && url.pathname === '/api/create') { send(res, 201, rooms.create(body.count, body.nickname)); return; }
+      if (req.method === 'POST' && url.pathname === '/api/join') { send(res, 201, rooms.join(body.code, body.nickname)); return; }
       if ((req.method === 'GET' && url.pathname === '/api/state') || (req.method === 'POST' && url.pathname === '/api/command')) {
         const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
         const {room, member} = rooms.authenticate(url.searchParams.get('code'), token);

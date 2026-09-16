@@ -3,7 +3,7 @@
     constructor(count = 2, options = {}) {
       if (![2, 3, 4].includes(count)) throw new Error('2~4명을 선택하세요.');
       this.random = options.random || Math.random;
-      this.players = Array.from({length: count}, (_, id) => ({id, name: `Player ${id + 1}`, chips: 10000}));
+      this.players = Array.from({length: count}, (_, id) => ({id, name: options.names?.[id] || `Player ${id + 1}`, chips: 10000}));
       this.dealer = -1;
       this.handNumber = 0;
       this.logs = [];

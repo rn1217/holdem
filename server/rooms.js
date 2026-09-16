@@ -6,6 +6,13 @@ require('../js/game.js');
 
 const fail = (message, status = 400) => { const error = new Error(message); error.status = status; throw error; };
 const secureRandom = () => randomInt(0, 2 ** 32) / 2 ** 32;
+function normalizeNickname(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') fail('닉네임은 문자열로 입력하세요.');
+  const name = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '').replace(/\s+/g, ' ').trim();
+  if (name.length > 20) fail('닉네임은 20자 이내로 입력하세요.');
+  return name;
+}
 
 class Rooms {
   constructor({clock = Date.now, turnMs = 60000, idleMs = 12 * 60 * 60 * 1000} = {}) {
@@ -14,28 +21,30 @@ class Rooms {
     this.turnMs = turnMs;
     this.idleMs = idleMs;
   }
-  create(count) {
+  create(count, nickname) {
+    const name = normalizeNickname(nickname);
     if (![2, 3, 4].includes(count)) fail('인원은 2~4명이어야 합니다.');
     if (this.rooms.size >= 500) fail('서버의 방이 가득 찼습니다.', 503);
     let code;
     do { code = randomBytes(4).toString('hex').toUpperCase(); } while (this.rooms.has(code));
     const room = {code, count, members: [], host: 0, game: null, revision: 0, deadline: null, touched: this.clock()};
     this.rooms.set(code, room);
-    return this.addMember(room);
+    return this.addMember(room, name);
   }
   get(code) {
     const room = this.rooms.get(String(code || '').toUpperCase());
     if (!room) fail('방이 없거나 만료되었습니다.', 404);
     return room;
   }
-  join(code) {
+  join(code, nickname) {
+    const name = normalizeNickname(nickname);
     const room = this.get(code);
     if (room.game) fail('이미 시작된 방에는 새로 참가할 수 없습니다.');
     if (room.members.length >= room.count) fail('방이 가득 찼습니다.');
-    return this.addMember(room);
+    return this.addMember(room, name);
   }
-  addMember(room) {
-    const member = {id: room.members.length, token: randomBytes(32).toString('hex'), lastSeen: this.clock()};
+  addMember(room, nickname) {
+    const member = {id: room.members.length, name: nickname || `Player ${room.members.length + 1}`, token: randomBytes(32).toString('hex'), lastSeen: this.clock()};
     room.members.push(member);
     room.touched = this.clock();
     room.revision++;
@@ -74,13 +83,13 @@ class Rooms {
       if (member.id !== room.host) fail('방장만 실행할 수 있습니다.', 403);
       if (body.command === 'start') {
         if (game || room.members.length !== room.count) fail('모든 참가자가 입장한 뒤 시작하세요.');
-        room.game = new Holdem.Game(room.count, {random: secureRandom});
+        room.game = new Holdem.Game(room.count, {random: secureRandom, names: room.members.map(member => member.name)});
       } else if (body.command === 'next') {
         if (!game || !game.finished || game.champion !== null) fail('다음 핸드를 시작할 수 없습니다.');
         game.nextHand();
       } else {
         if (!game || !game.finished) fail('핸드 종료 후에만 새 게임을 시작할 수 있습니다.');
-        room.game = new Holdem.Game(room.count, {random: secureRandom});
+        room.game = new Holdem.Game(room.count, {random: secureRandom, names: room.members.map(member => member.name)});
       }
     } else if (body.command === 'act') {
       if (!game || game.finished || game.actor !== member.id) fail('자신의 턴에만 행동할 수 있습니다.', 403);
@@ -97,7 +106,7 @@ class Rooms {
     const state = {
       code: room.code, count: room.count, you: member.id, host: room.host,
       revision: room.revision, deadline: room.deadline, serverTime: this.clock(),
-      members: room.members.map(m => ({id: m.id, online: this.clock() - m.lastSeen < 10000})),
+      members: room.members.map(m => ({id: m.id, name: m.name, online: this.clock() - m.lastSeen < 10000})),
       game: null
     };
     if (!g) return state;

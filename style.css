@@ -58,3 +58,12 @@
 .winner-cards { margin: 12px 0 20px; }
 .winner-dialog .winner-footnote { font-size: 11px; line-height: 1.7; margin: 10px 0 20px; }
 @media (max-width: 540px) { .winner-dialog { padding: 20px 14px; } .winner-hand-name { font-size: 23px; } .winner-dialog .winner-payout { font-size: 16px; } }
+/* The local player's turn is green; other active seats keep the gold highlight. */
+.player.active.my-turn { border-color: #63d99a; box-shadow: inset 0 3px #63d99a; }
+#controls > #raise-form { margin: 0 0 14px; }
+.nickname-field { text-align: left; margin-top: 22px; }
+.nickname-field label { display: block; font-size: 13px; margin-bottom: 7px; }
+.nickname-field input { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: #0f1913; color: var(--text); font: inherit; }
+.nickname-field small { color: var(--muted); font-size: 11px; }
+#nickname-help { display: block; margin-top: 6px; }
+.player h3, #turn-title, #winner-title, .winner-payout, #room-info, #lobby-members, #action-notice-player { overflow-wrap: anywhere; }

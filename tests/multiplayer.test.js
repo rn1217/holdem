@@ -69,6 +69,29 @@ test('Timeout auto-fold/check; same token reconnects to same seat; idle rooms ex
   now+=1000001;t.rooms.sweep();assert.throws(()=>t.rooms.get(t.room.code),/없거나/);
 });
 
+test('Nicknames survive start, next hand, reset and reconnection',()=>{
+  const rooms=new Rooms();const first=rooms.create(2,'  홀덤왕  ');const second=rooms.join(first.code,'친구: 김');
+  const room=rooms.get(first.code);
+  const send=(command,extra={})=>rooms.command(room,room.members[0],{command,revision:room.revision,...extra});
+  send('start');assert.equal(room.game.players[0].name,'홀덤왕');assert.equal(room.game.players[1].name,'친구: 김');
+  assert(room.game.logs.some(log=>log.includes('홀덤왕')));
+  send('act',{action:'fold'});send('next');assert.equal(room.game.players[1].name,'친구: 김');
+  rooms.command(room,room.members[room.game.actor],{command:'act',action:'fold',revision:room.revision});
+  send('reset');assert.equal(room.game.players[0].name,'홀덤왕');
+  assert.equal(rooms.authenticate(first.code,second.token).member.name,'친구: 김');
+});
+test('Blank nicknames default to seat names; malformed and oversized values rejected',()=>{
+  const rooms=new Rooms();const first=rooms.create(3,' \t\n ');rooms.join(first.code,'\u200b ');rooms.join(first.code);
+  assert.deepEqual(rooms.get(first.code).members.map(member=>member.name),['Player 1','Player 2','Player 3']);
+  assert.throws(()=>rooms.create(2,'a'.repeat(21)),/20/);
+  assert.throws(()=>rooms.create(2,{name:'bad'}),/문자열/);
+  assert.equal(rooms.rooms.size,1);
+});
+test('Names remain plain data, including markup and punctuation',()=>{
+  const rooms=new Rooms();const first=rooms.create(2,'<b>나</b>');rooms.join(first.code,'나: Check');
+  const room=rooms.get(first.code);rooms.command(room,room.members[0],{command:'start',revision:room.revision});
+  assert.equal(rooms.view(room,room.members[1]).game.players[0].name,'<b>나</b>');
+});
 test('HTTP integration: independent clients, authorization, privacy, duplicate action, assets',async()=>{
   const {server}=createServer();
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -79,14 +102,15 @@ test('HTTP integration: independent clients, authorization, privacy, duplicate a
     return {status:response.status,data:await response.json()};
   }
   try {
-    const a=(await request('/api/create',{count:2})).data;
-    const b=(await request('/api/join',{code:a.code})).data;
+    const a=(await request('/api/create',{count:2,nickname:'방장'})).data;
+    const b=(await request('/api/join',{code:a.code,nickname:'  '})).data;
     const statePath=`/api/state?code=${a.code}`,commandPath=`/api/command?code=${a.code}`;
     assert.equal((await request(statePath)).status,401);
     let state=(await request(statePath,undefined,a.token)).data;
     assert.equal((await request(commandPath,{command:'start',revision:state.revision},b.token)).status,403);
     state=(await request(commandPath,{command:'start',revision:state.revision},a.token)).data;
     const other=(await request(statePath,undefined,b.token)).data;
+    assert.equal(state.game.players[0].name,'방장');assert.equal(other.game.players[1].name,'Player 2');
     assert.equal(state.game.players[0].cards.length,2);assert.deepEqual(state.game.players[1].cards,[]);
     assert.equal(other.game.players[1].cards.length,2);assert.deepEqual(other.game.players[0].cards,[]);
     const move={command:'act',action:'call',revision:state.revision};
