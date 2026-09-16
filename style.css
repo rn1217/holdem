@@ -15,3 +15,35 @@
 .red-suit { color: #ff9b9b; }
 .rank-list small { display: block; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .rank-timer-note { margin: 0; color: var(--gold); font-size: 11px; line-height: 1.7; }
+/* Action announcements overlay the table without moving or blocking its controls. */
+.action-notice {
+  --notice-color: #b6d8c5;
+  position: fixed;
+  z-index: 20;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 12px 24px;
+  border: 1px solid var(--notice-color);
+  border-radius: 12px;
+  background: #101c18f5;
+  box-shadow: 0 8px 28px #0006;
+  color: var(--notice-color);
+  text-align: center;
+  pointer-events: none;
+  animation: notice-arrive 180ms ease-out;
+}
+#action-notice-player { display: block; font-size: 12px; letter-spacing: 1px; color: #e5eae5; }
+#action-notice-label { display: block; font-size: 22px; line-height: 1.4; overflow-wrap: anywhere; }
+.action-notice--fold { --notice-color: #c5b6b6; }
+.action-notice--check { --notice-color: #a5cbb8; }
+.action-notice--call { --notice-color: #95caff; }
+.action-notice--raise { --notice-color: #ddb0ff; }
+.action-notice--allin { --notice-color: #ffd886; background: linear-gradient(120deg, #342513, #15281f); border-width: 2px; box-shadow: 0 0 24px #e8b45240, 0 8px 28px #0006; }
+.action-notice--allin #action-notice-label { font-size: 27px; font-weight: 900; font-style: italic; letter-spacing: 1px; text-shadow: 0 0 14px #ffba4a70; animation: allin-emphasis 400ms ease-out; }
+@keyframes notice-arrive { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes allin-emphasis { from { opacity: .5; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+@media (max-width: 540px) { .action-notice { top: 78px; padding: 10px 18px; } #action-notice-label { font-size: 19px; } .action-notice--allin #action-notice-label { font-size: 22px; } }
+@media (prefers-reduced-motion: reduce) { .action-notice, .action-notice--allin #action-notice-label { animation: none; } }
