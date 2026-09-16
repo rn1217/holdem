@@ -9,7 +9,30 @@
 <section class="action-panel"><div class="action-heading"><div><small>YOUR HAND</small><h2 id="turn-title">방에 참가하세요</h2></div><button id="hide-cards" class="quiet" hidden>내 카드 숨기기</button></div><div id="hole-cards" class="cards personal" aria-label="내 홀 카드"></div>
 <div id="controls" hidden><div class="action-buttons"><button data-action="fold" class="danger">Fold</button><button data-action="check">Check</button><button data-action="call" id="call-button">Call</button><button data-action="allin" class="allin">All-In</button></div><form id="raise-form"><label for="raise-amount">이번 라운드의 Raise 총액 <small id="raise-hint"></small></label><div class="raise-row"><input id="raise-amount" type="number" inputmode="numeric" step="1" required><button id="raise-button" type="submit" class="primary">Raise</button></div></form></div>
 <p id="error" class="error" role="alert"></p><button id="next-hand" class="primary wide" hidden>다음 핸드 · Next Hand →</button></section></section>
-<aside><div class="log-heading"><h2>게임 로그</h2><span>HAND HISTORY</span></div><ol id="log"></ol><p class="table-note">각자 자신의 기기로 플레이합니다. 자신의 패만 보이며 상대의 패는 Showdown에 공개됩니다. 턴 제한은 60초이며 시간 초과 시 자동 Check/Fold합니다.</p><details><summary>베팅 안내</summary><p>Raise는 이번 라운드에 낼 총액입니다. 최소 인상 폭은 직전 정상 레이즈 폭이며 최초에는 200입니다.</p><p>최소 Raise에 부족한 칩은 All-In으로 낼 수 있습니다. 짧은 All-In만으로는 이미 베팅한 플레이어의 재레이즈 권한이 열리지 않습니다.</p><p>동점 팟은 분할하며 남은 1 Chip은 딜러 왼쪽부터 지급합니다.</p></details></aside></main>
+<aside>
+  <section class="rank-guide" aria-label="포커 족보 안내">
+    <button id="rank-toggle" class="quiet wide" type="button" aria-expanded="false" aria-controls="rank-content">♠ 족보 보기 · 강한 순서</button>
+    <div id="rank-content" hidden>
+      <p class="rank-intro">내 카드 2장 + 가운데 5장 중<br><strong>가장 강한 5장</strong>으로 승부해요.<br>아래는 <strong>강한 순서</strong>예요.</p>
+      <ol class="rank-list">
+        <li><strong>로열 플러시</strong><span class="rank-example">A♠ K♠ Q♠ J♠ 10♠</span><small>같은 무늬의 A·K·Q·J·10</small></li>
+        <li><strong>스트레이트 플러시</strong><span class="rank-example">9<span class="red-suit">♥</span> 8<span class="red-suit">♥</span> 7<span class="red-suit">♥</span> 6<span class="red-suit">♥</span> 5<span class="red-suit">♥</span></span><small>같은 무늬 + 연속 숫자 5장</small></li>
+        <li><strong>포카드</strong><span class="rank-example">9♠ 9<span class="red-suit">♥</span> 9<span class="red-suit">♦</span> 9♣ K♠</span><small>같은 숫자 4장</small></li>
+        <li><strong>풀하우스</strong><span class="rank-example">8♠ 8<span class="red-suit">♥</span> 8<span class="red-suit">♦</span> K♣ K♠</span><small>같은 숫자 3장 + 다른 숫자 2장</small></li>
+        <li><strong>플러시</strong><span class="rank-example">A♣ J♣ 8♣ 5♣ 2♣</span><small>같은 무늬 5장</small></li>
+        <li><strong>스트레이트</strong><span class="rank-example">9♠ 8<span class="red-suit">♥</span> 7♣ 6<span class="red-suit">♦</span> 5♠</span><small>무늬 상관없이 연속 숫자 5장</small></li>
+        <li><strong>트리플</strong><span class="rank-example">7♠ 7<span class="red-suit">♥</span> 7<span class="red-suit">♦</span> K♣ 2♠</span><small>같은 숫자 3장</small></li>
+        <li><strong>투페어</strong><span class="rank-example">K♠ K<span class="red-suit">♥</span> 5♣ 5<span class="red-suit">♦</span> 2♠</span><small>같은 숫자 2장씩, 두 쌍</small></li>
+        <li><strong>원페어</strong><span class="rank-example">A♠ A<span class="red-suit">♥</span> 8♣ 6<span class="red-suit">♦</span> 2♠</span><small>같은 숫자 2장, 한 쌍</small></li>
+        <li><strong>하이카드</strong><span class="rank-example">A♠ J<span class="red-suit">♥</span> 8♣ 6<span class="red-suit">♦</span> 2♠</span><small>위 조합이 없으면 높은 카드로 비교</small></li>
+      </ol>
+      <p class="rank-notes">숫자 순서: A &gt; K &gt; Q &gt; J &gt; 10 … &gt; 2<br>A·2·3·4·5도 스트레이트예요.<br>같은 족보면 구성 숫자와 남은 높은 카드(키커)를 비교해요. 최강 5장이 같은 강도면 팟을 나눠요. 무늬에는 우열이 없어요.</p>
+      <p class="rank-notes">내 카드 2장을 꼭 쓸 필요는 없어요. 가운데 카드 5장만 써도 돼요.</p>
+      <p class="rank-timer-note">족보를 보는 동안에도 턴 시간은 계속 흘러갑니다.</p>
+    </div>
+  </section>
+  <div class="log-heading"><h2>게임 로그</h2><span>HAND HISTORY</span></div><ol id="log"></ol><p class="table-note">각자 자신의 기기로 플레이합니다. 자신의 패만 보이며 상대의 패는 Showdown에 공개됩니다. 턴 제한은 60초이며 시간 초과 시 자동 Check/Fold합니다.</p><details><summary>베팅 안내</summary><p>Raise는 이번 라운드에 낼 총액입니다. 최소 인상 폭은 직전 정상 레이즈 폭이며 최초에는 200입니다.</p><p>최소 Raise에 부족한 칩은 All-In으로 낼 수 있습니다. 짧은 All-In만으로는 이미 베팅한 플레이어의 재레이즈 권한이 열리지 않습니다.</p><p>동점 팟은 분할하며 남은 1 Chip은 딜러 왼쪽부터 지급합니다.</p></details>
+</aside></main>
 <dialog id="setup"><div class="dialog-suit">♠</div><p class="eyebrow">FRIENDS AT ONE TABLE</p><h1>함께 플레이하세요</h1><p>방을 만들고 친구에게 코드를 보내세요.<br>각자 자신의 기기로 접속합니다.</p><form id="create-form"><fieldset><legend>플레이 인원</legend><label><input type="radio" name="count" value="2" checked><span>2명</span></label><label><input type="radio" name="count" value="3"><span>3명</span></label><label><input type="radio" name="count" value="4"><span>4명</span></label></fieldset><button class="primary wide" type="submit">방 만들기</button></form><hr><form id="join-form"><label for="room-code">참가 코드</label><div class="raise-row"><input id="room-code" required pattern="[A-Fa-f0-9]{8}" maxlength="8" autocomplete="off" placeholder="8자리 방 코드"><button type="submit">참가</button></div></form><p id="setup-error" class="error" role="alert"></p><p class="table-note">1인 10,000 Chip · Blinds 100 / 200</p></dialog>
 <dialog id="lobby"><p class="eyebrow">WAITING ROOM</p><h2>친구를 기다리는 중</h2><p>같은 서버 주소로 접속한 뒤<br>아래 코드를 입력해 주세요.</p><strong id="invite-code" class="invite-code"></strong><p id="lobby-members"></p><button id="start-game" class="primary wide">게임 시작</button><p id="lobby-hint"></p><p id="lobby-error" class="error" role="alert"></p></dialog>
 </body></html>

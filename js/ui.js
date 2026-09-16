@@ -123,6 +123,13 @@
     catch(error) {$('#error').textContent=$('#lobby-error').textContent=error.message;try{update(await request(endpoint('state')));}catch{connected=false;}}
     finally {busy=false;render();}
   }
+  // This local guide stays open across server updates and never changes game state.
+  $('#rank-toggle').addEventListener('click', () => {
+    const expanded = $('#rank-toggle').getAttribute('aria-expanded') !== 'true';
+    $('#rank-toggle').setAttribute('aria-expanded', String(expanded));
+    $('#rank-toggle').textContent = expanded ? '♠ 족보 닫기' : '♠ 족보 보기 · 강한 순서';
+    $('#rank-content').hidden = !expanded;
+  });
   $('#create-form').addEventListener('submit',e=>{e.preventDefault();enter('/api/create',{count:Number(new FormData(e.currentTarget).get('count'))});});
   $('#join-form').addEventListener('submit',e=>{e.preventDefault();enter('/api/join',{code:$('#room-code').value.trim().toUpperCase()});});
   $('#start-game').addEventListener('click',()=>command('start'));$('#next-hand').addEventListener('click',()=>command('next'));$('#new-game').addEventListener('click',()=>command('reset'));
