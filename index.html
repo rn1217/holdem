@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FRIENDS HOLD'EM</title><link rel="stylesheet" href="style.css"><script defer src="js/ui.js"></script></head>
 <body>
+<dialog id="winner-dialog" class="winner-dialog" aria-labelledby="winner-title">
+  <p class="eyebrow">HAND COMPLETE</p>
+  <h2 id="winner-title"></h2>
+  <div id="winner-details"></div>
+  <button id="winner-close" type="button" class="primary wide">확인 · 테이블로 돌아가기</button>
+</dialog>
 <div id="action-notice" class="action-notice" role="status" aria-live="polite" aria-atomic="true" hidden><span id="action-notice-player"></span><strong id="action-notice-label"></strong></div>
 <header class="topbar"><div class="brand"><span class="brand-icon">♠</span><div>FRIENDS HOLD'EM<small>각자의 화면, 하나의 테이블</small></div></div><button id="new-game" class="quiet" hidden>새 게임</button></header>
 <div class="connection-bar"><span id="connection" role="status">서버 연결 대기</span><span id="room-info"></span><span id="timer"></span></div>

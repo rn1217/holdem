@@ -16,9 +16,58 @@
     return data;
   }
   const endpoint = name => `/api/${name}?code=${encodeURIComponent(session.code)}`;
-
   const actionNotices = [];
   let noticeTimer = null;
+  let pendingWinner = null;
+
+  function winningPots(game) {
+    return game.results.filter(result => !result.refund).map((result, index) => {
+      const share = Math.floor(result.amount / result.winners.length);
+      const remainder = result.amount % result.winners.length;
+      return {label: index === 0 ? 'Main Pot' : `Side Pot ${index}`, amount: result.amount,
+        tied: result.winners.length > 1, name: result.name,
+        winners: result.winners.map((id, winnerIndex) => ({
+          player: game.players.find(player => player.id === id),
+          chips: share + (winnerIndex < remainder ? 1 : 0)
+        }))};
+    });
+  }
+  function showWinner(game) {
+    const names = {'Royal Flush':'로열 플러시','Straight Flush':'스트레이트 플러시',
+      'Four of a Kind':'포카드','Full House':'풀하우스','Flush':'플러시','Straight':'스트레이트',
+      'Three of a Kind':'트리플','Two Pair':'투페어','One Pair':'원페어','High Card':'하이카드'};
+    const pots = winningPots(game);
+    const winnerIds = [...new Set(pots.flatMap(pot => pot.winners.map(winner => winner.player.id)))];
+    $('#winner-title').textContent = game.champion !== null ? `Player ${game.champion + 1} 최종 우승!`
+      : winnerIds.length === 1 ? `Player ${winnerIds[0] + 1} 승리!` : '이번 핸드의 승자';
+    const details = $('#winner-details');
+    details.replaceChildren();
+    for (const pot of pots) {
+      const section = document.createElement('section');
+      section.className = 'winner-pot';
+      line(section, `${pot.label} · ${format(pot.amount)} Chip${pot.tied ? ' · 공동 승리' : ''}`, 'p').className = 'winner-pot-label';
+      line(section, names[pot.name] || pot.name, 'h3').className = 'winner-hand-name';
+      for (const winner of pot.winners) {
+        line(section, `${winner.player.name} · ${format(winner.chips)} Chip 획득`, 'p').className = 'winner-payout';
+        // Only show already-public showdown cards. A fold win never reveals private cards.
+        if (game.showdown && winner.player.hand) {
+          const cards = document.createElement('div');
+          cards.className = 'cards winner-cards';
+          cards.setAttribute('aria-label', `${winner.player.name}의 최강 5장`);
+          cards.append(...winner.player.hand.cards.map(value => card(value)));
+          section.append(cards);
+        }
+      }
+      details.append(section);
+    }
+    line(details, '표시된 획득 칩은 본인이 베팅한 금액을 포함합니다. 미콜 금액 반환은 테이블 결과에서 확인할 수 있습니다.', 'p').className = 'winner-footnote';
+    $('#winner-dialog').showModal();
+    $('#winner-close').focus();
+  }
+  function clearWinner() {
+    pendingWinner = null;
+    if ($('#winner-dialog').open) $('#winner-dialog').close();
+  }
 
   // Compare overlapping history, including when the server's 250-line window rolls.
   // This reads existing public logs only; it never sends commands or changes game state.
@@ -44,7 +93,15 @@
     $('#action-notice').hidden = true;
   }
   function showNextActionNotice() {
-    if (noticeTimer !== null || !actionNotices.length) return;
+    if (noticeTimer !== null) return;
+    if (!actionNotices.length) {
+      if (pendingWinner) {
+        const game = pendingWinner;
+        pendingWinner = null;
+        showWinner(game);
+      }
+      return;
+    }
     const action = actionNotices.shift();
     const notice = $('#action-notice');
     $('#action-notice-player').textContent = action.player;
@@ -57,14 +114,13 @@
       showNextActionNotice();
     }, action.kind === 'allin' ? 3200 : 2200);
   }
-
   function update(data) {
     if (state && data.revision < state.revision) return;
     const previousGame = state?.game;
     const currentGame = data.game;
     const continuingHand = state?.code === data.code && previousGame && currentGame &&
       previousGame.handNumber === currentGame.handNumber && !(previousGame.finished && !currentGame.finished);
-    if (!continuingHand) clearActionNotices();
+    if (!continuingHand) { clearActionNotices(); clearWinner(); }
     else if (data.revision > state.revision) {
       actionNotices.push(...newActionMessages(previousGame.logs, currentGame.logs));
       showNextActionNotice();
@@ -72,6 +128,10 @@
     state=data; offset=data.serverTime-Date.now(); connected=true;
     if ($('#setup').open) $('#setup').close();
     render();
+    if (currentGame?.finished && (!continuingHand || !previousGame.finished)) {
+      pendingWinner = currentGame;
+      showNextActionNotice();
+    }
   }
   function card(c, empty=false) {
     const el=document.createElement('div');
@@ -151,7 +211,7 @@
     catch(error) {
       connected=false;
       if([401,404].includes(error.status)) {
-        clearActionNotices();session=null;state=null;try {sessionStorage.removeItem('holdem-session');}catch{}
+        clearActionNotices();clearWinner();session=null;state=null;try {sessionStorage.removeItem('holdem-session');}catch{}
         if($('#lobby').open) $('#lobby').close();if(!$('#setup').open) $('#setup').showModal();
         $('#setup-error').textContent=error.message;$('#hole-cards').replaceChildren();$('#controls').hidden=true;
       }
@@ -175,6 +235,7 @@
     finally {busy=false;render();}
   }
   // This local guide stays open across server updates and never changes game state.
+  $('#winner-close').addEventListener('click', () => $('#winner-dialog').close());
   $('#rank-toggle').addEventListener('click', () => {
     const expanded = $('#rank-toggle').getAttribute('aria-expanded') !== 'true';
     $('#rank-toggle').setAttribute('aria-expanded', String(expanded));
