@@ -19,6 +19,23 @@
   const actionNotices = [];
   let noticeTimer = null;
   let pendingWinner = null;
+  let resultRevealTimer = null;
+  let waitingForResult = false;
+
+  function announceResult(game) {
+    const notice = $('#action-notice');
+    $('#action-notice-player').textContent = game.showdown ? 'SHOWDOWN · 쇼다운' : 'HAND COMPLETE';
+    $('#action-notice-label').textContent = game.showdown ? '패를 공개합니다' : '승자를 확인합니다';
+    notice.className = 'action-notice action-notice--raise';
+    notice.hidden = false;
+    resultRevealTimer = setTimeout(() => {
+      resultRevealTimer = null;
+      notice.hidden = true;
+      waitingForResult = false;
+      render();
+      showWinner(game);
+    }, 1000);
+  }
 
   function winningPots(game) {
     return game.results.filter(result => !result.refund).map((result, index) => {
@@ -65,6 +82,9 @@
     $('#winner-close').focus();
   }
   function clearWinner() {
+    clearTimeout(resultRevealTimer);
+    resultRevealTimer = null;
+    waitingForResult = false;
     pendingWinner = null;
     if ($('#winner-dialog').open) $('#winner-dialog').close();
   }
@@ -98,7 +118,7 @@
       if (pendingWinner) {
         const game = pendingWinner;
         pendingWinner = null;
-        showWinner(game);
+        announceResult(game);
       }
       return;
     }
@@ -125,10 +145,12 @@
       actionNotices.push(...newActionMessages(previousGame.logs, currentGame.logs));
       showNextActionNotice();
     }
+    const justFinished = currentGame?.finished && (!continuingHand || !previousGame.finished);
+    if (justFinished) waitingForResult = true;
     state=data; offset=data.serverTime-Date.now(); connected=true;
     if ($('#setup').open) $('#setup').close();
     render();
-    if (currentGame?.finished && (!continuingHand || !previousGame.finished)) {
+    if (justFinished) {
       pendingWinner = currentGame;
       showNextActionNotice();
     }
@@ -146,6 +168,16 @@
     $('#connection').textContent=connected?'● 서버 연결됨':session?'연결 끊김 · 자동 재접속 중':'방을 만들거나 참가하세요';
     if(!state) return;
     $('#room-info').textContent=`방 ${state.code} · 나: Player ${state.you+1}${state.you===state.host?' (방장)':''}`;
+    // Hold the previous table until the introduction ends, including chips and win logs.
+    // The authoritative server state is unchanged; this is a presentation-only delay.
+    if (waitingForResult) {
+      $('#controls').hidden = true;
+      $('#next-hand').hidden = true;
+      $('#new-game').hidden = true;
+      $('#result').hidden = true;
+      $('#turn-title').textContent = '결과 확인 준비 중…';
+      return;
+    }
     const g=state.game;
     if(!g) {
       if(!$('#lobby').open) $('#lobby').showModal();
@@ -229,7 +261,7 @@
     finally {busy=false;$('#setup').querySelectorAll('button').forEach(b=>b.disabled=false);render();}
   }
   async function command(name,extra={}) {
-    if(busy||!connected||!state) return;busy=true;render();$('#error').textContent=$('#lobby-error').textContent='';
+    if(busy||!connected||!state||waitingForResult) return;busy=true;render();$('#error').textContent=$('#lobby-error').textContent='';
     try {update(await request(endpoint('command'),{command:name,revision:state.revision,...extra}));}
     catch(error) {$('#error').textContent=$('#lobby-error').textContent=error.message;try{update(await request(endpoint('state')));}catch{connected=false;}}
     finally {busy=false;render();}
