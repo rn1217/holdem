@@ -50,31 +50,44 @@
         }))};
     });
   }
+  function winningPlayers(game) {
+    const winners = new Map();
+    // Round each pot separately before adding payouts, preserving odd-chip rules.
+    for (const pot of winningPots(game)) {
+      for (const payout of pot.winners) {
+        if (!winners.has(payout.player.id)) {
+          winners.set(payout.player.id, {player: payout.player, chips: 0, name: pot.name, pots: []});
+        }
+        const winner = winners.get(payout.player.id);
+        winner.chips += payout.chips;
+        winner.pots.push({label: pot.label, chips: payout.chips, tied: pot.tied});
+      }
+    }
+    return [...winners.values()];
+  }
   function showWinner(game) {
     const names = {'Royal Flush':'로열 플러시','Straight Flush':'스트레이트 플러시',
       'Four of a Kind':'포카드','Full House':'풀하우스','Flush':'플러시','Straight':'스트레이트',
       'Three of a Kind':'트리플','Two Pair':'투페어','One Pair':'원페어','High Card':'하이카드'};
-    const pots = winningPots(game);
-    const winnerIds = [...new Set(pots.flatMap(pot => pot.winners.map(winner => winner.player.id)))];
+    const winners = winningPlayers(game);
+    const winnerIds = winners.map(winner => winner.player.id);
     $('#winner-title').textContent = game.champion !== null ? `${playerName(game, game.champion)} 최종 우승!`
       : winnerIds.length === 1 ? `${playerName(game, winnerIds[0])} 승리!` : '이번 핸드의 승자';
     const details = $('#winner-details');
     details.replaceChildren();
-    for (const pot of pots) {
+    for (const winner of winners) {
       const section = document.createElement('section');
       section.className = 'winner-pot';
-      line(section, `${pot.label} · ${format(pot.amount)} Chip${pot.tied ? ' · 공동 승리' : ''}`, 'p').className = 'winner-pot-label';
-      line(section, names[pot.name] || pot.name, 'h3').className = 'winner-hand-name';
-      for (const winner of pot.winners) {
-        line(section, `${winner.player.name} · ${format(winner.chips)} Chip 획득`, 'p').className = 'winner-payout';
-        // Only show already-public showdown cards. A fold win never reveals private cards.
-        if (game.showdown && winner.player.hand) {
-          const cards = document.createElement('div');
-          cards.className = 'cards winner-cards';
-          cards.setAttribute('aria-label', `${winner.player.name}의 최강 5장`);
-          cards.append(...winner.player.hand.cards.map(value => card(value)));
-          section.append(cards);
-        }
+      line(section, winner.pots.map(pot => `${pot.label} ${format(pot.chips)} Chip${pot.tied ? ' (분할)' : ''}`).join(' · '), 'p').className = 'winner-pot-label';
+      line(section, names[winner.name] || winner.name, 'h3').className = 'winner-hand-name';
+      line(section, `${winner.player.name} · ${format(winner.chips)} Chip 획득`, 'p').className = 'winner-payout';
+      // Only show already-public showdown cards. A fold win never reveals private cards.
+      if (game.showdown && winner.player.hand) {
+        const cards = document.createElement('div');
+        cards.className = 'cards winner-cards';
+        cards.setAttribute('aria-label', `${winner.player.name}의 최강 5장`);
+        cards.append(...winner.player.hand.cards.map(value => card(value)));
+        section.append(cards);
       }
       details.append(section);
     }
@@ -232,8 +245,12 @@
     }
     $('#result').hidden=!g.finished;$('#result').replaceChildren();
     if(g.finished) {
-      line($('#result'),'핸드 결과','h2');let index=0;
-      for(const r of g.results) { const label=r.refund?'반환':index++===0?'Main Pot':`Side Pot ${index-1}`;line($('#result'),`${label} ${format(r.amount)} → ${r.winners.map(id=>playerName(g,id)).join(' + ')} · ${r.name}`); }
+      line($('#result'),'핸드 결과','h2');
+      for(const winner of winningPlayers(g)) {
+        line($('#result'),`${winner.player.name} · 합계 ${format(winner.chips)} Chip 획득 · ${winner.name}`);
+        line($('#result'),winner.pots.map(pot=>`${pot.label} ${format(pot.chips)}${pot.tied?' (분할)':''}`).join(' · '));
+      }
+      for(const refund of g.results.filter(result=>result.refund)) line($('#result'),`미콜 금액 반환 ${format(refund.amount)} → ${refund.winners.map(id=>playerName(g,id)).join(' + ')}`);
       for(const p of g.players.filter(p=>p.hand)) line($('#result'),`${p.name}: ${p.cards.map(cardText).join(' ')} · ${p.hand.name} · 최강 5장 ${p.hand.cards.map(cardText).join(' ')}`);
       if(state.you!==state.host) line($('#result'),'방장이 다음 핸드 또는 새 게임을 시작할 수 있습니다.');
     }
