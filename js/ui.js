@@ -16,8 +16,59 @@
     return data;
   }
   const endpoint = name => `/api/${name}?code=${encodeURIComponent(session.code)}`;
+
+    const actionNotices = [];
+  let noticeTimer = null;
+
+  // Compare overlapping history, including when the server's 250-line window rolls.
+  // This reads existing public logs only; it never sends commands or changes game state.
+  function newActionMessages(previousLogs, currentLogs) {
+    let overlap = Math.min(previousLogs.length, currentLogs.length);
+    while (overlap > 0 && !previousLogs.slice(-overlap).every((log, i) => log === currentLogs[i])) overlap--;
+    return currentLogs.slice(overlap).flatMap(message => {
+      const match = /^(Player \d+): (Fold|Check|Call \d+(?: · All-In)?|Raise to \d+|All-In to \d+)$/.exec(message);
+      if (!match) return [];
+      const action = match[2];
+      const kind = action.includes('All-In') ? 'allin' : action.split(' ')[0].toLowerCase();
+      const amount = /\d+/.exec(action)?.[0];
+      const label = kind === 'allin'
+        ? `ALL-IN${amount ? ` · ${Number(amount).toLocaleString('en-US')}${action.startsWith('Call') ? ' Call' : ' 총액'}` : ''}`
+        : action.replace(/\d+/, value => Number(value).toLocaleString('en-US'));
+      return [{player: match[1], kind, label}];
+    });
+  }
+  function clearActionNotices() {
+    clearTimeout(noticeTimer);
+    noticeTimer = null;
+    actionNotices.length = 0;
+    $('#action-notice').hidden = true;
+  }
+  function showNextActionNotice() {
+    if (noticeTimer !== null || !actionNotices.length) return;
+    const action = actionNotices.shift();
+    const notice = $('#action-notice');
+    $('#action-notice-player').textContent = action.player;
+    $('#action-notice-label').textContent = action.label;
+    notice.className = `action-notice action-notice--${action.kind}`;
+    notice.hidden = false;
+    noticeTimer = setTimeout(() => {
+      notice.hidden = true;
+      noticeTimer = null;
+      showNextActionNotice();
+    }, action.kind === 'allin' ? 3200 : 2200);
+  }
+
   function update(data) {
     if (state && data.revision < state.revision) return;
+    const previousGame = state?.game;
+    const currentGame = data.game;
+    const continuingHand = state?.code === data.code && previousGame && currentGame &&
+      previousGame.handNumber === currentGame.handNumber && !(previousGame.finished && !currentGame.finished);
+    if (!continuingHand) clearActionNotices();
+    else if (data.revision > state.revision) {
+      actionNotices.push(...newActionMessages(previousGame.logs, currentGame.logs));
+      showNextActionNotice();
+    }
     state=data; offset=data.serverTime-Date.now(); connected=true;
     if ($('#setup').open) $('#setup').close();
     render();
@@ -100,7 +151,7 @@
     catch(error) {
       connected=false;
       if([401,404].includes(error.status)) {
-        session=null;state=null;try {sessionStorage.removeItem('holdem-session');}catch{}
+        clearActionNotices();session=null;state=null;try {sessionStorage.removeItem('holdem-session');}catch{}
         if($('#lobby').open) $('#lobby').close();if(!$('#setup').open) $('#setup').showModal();
         $('#setup-error').textContent=error.message;$('#hole-cards').replaceChildren();$('#controls').hidden=true;
       }
