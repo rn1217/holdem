@@ -17,7 +17,7 @@
   }
   const endpoint = name => `/api/${name}?code=${encodeURIComponent(session.code)}`;
 
-    const actionNotices = [];
+  const actionNotices = [];
   let noticeTimer = null;
 
   // Compare overlapping history, including when the server's 250-line window rolls.
