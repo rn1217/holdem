@@ -3,7 +3,7 @@
     constructor(count = 2, options = {}) {
       if (![2, 3, 4].includes(count)) throw new Error('2~4명을 선택하세요.');
       this.random = options.random || Math.random;
-      this.players = Array.from({length: count}, (_, id) => ({id, name: options.names?.[id] || `Player ${id + 1}`, chips: 10000}));
+      this.players = Array.from({length: count}, (_, id) => ({id, name: options.names?.[id] || `Player ${id + 1}`, chips: 10000, retired: Boolean(options.retired?.[id])}));
       this.dealer = -1;
       this.handNumber = 0;
       this.logs = [];
@@ -31,8 +31,8 @@
     }
     nextHand() {
       if (!this.finished) throw new Error('현재 핸드가 진행 중입니다.');
-      if (this.players.filter(p => p.chips > 0).length < 2) return;
-      this.dealer = this.nextSeat(this.dealer, p => p.chips > 0);
+      if (this.players.filter(p => p.chips > 0 && !p.retired).length < 2) return;
+      this.dealer = this.nextSeat(this.dealer, p => p.chips > 0 && !p.retired);
       this.handNumber++;
       this.finished = false;
       this.champion = null;
@@ -41,7 +41,7 @@
       this.results = [];
       this.awardedPot = 0;
       this.deck = Holdem.shuffle(Holdem.createDeck(), this.random);
-      for (const p of this.players) Object.assign(p, {inHand: p.chips > 0, folded: false, allIn: false, streetBet: 0, totalBet: 0, cards: [], lastAction: '', actedAt: null, hand: null});
+      for (const p of this.players) Object.assign(p, {inHand: p.chips > 0 && !p.retired, folded: false, allIn: false, streetBet: 0, totalBet: 0, cards: [], lastAction: '', actedAt: null, hand: null});
       const active = p => p.inHand;
       this.smallBlind = this.contenders.length === 2 ? this.dealer : this.nextSeat(this.dealer, active);
       this.bigBlind = this.nextSeat(this.smallBlind, active);
@@ -121,6 +121,8 @@
       if (able.length === 1 && able[0].streetBet >= this.currentBet) this.pending.clear();
       if (!this.pending.size) { this.advanceStreet(); return; }
       this.actor = this.nextSeat(after, p => this.pending.has(p.id));
+      // A disconnected seat folds only when its next action is due.
+      if (this.players[this.actor].retired) this.act('fold');
     }
     advanceStreet() {
       if (this.phase === 'River') { this.settle(true); return; }
@@ -179,7 +181,7 @@
         this.results.push({amount, winners: winners.map(p => p.id), name, refund: false});
       }
       this.players.forEach(p => { p.totalBet = 0; });
-      const remaining = this.players.filter(p => p.chips > 0);
+      const remaining = this.players.filter(p => p.chips > 0 && !p.retired);
       this.champion = remaining.length === 1 ? remaining[0].id : null;
     }
   }

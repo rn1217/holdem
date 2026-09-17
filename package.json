@@ -3,6 +3,6 @@
   "version": "2.0.0",
   "private": true,
   "description": "Server-authoritative 2–4 player Texas Hold'em",
-  "scripts": {"start": "node server.js", "test": "node tests/run-tests.js && node --test tests/multiplayer.test.js"},
+  "scripts": {"start": "node server.js", "test": "node tests/run-tests.js && node --test tests/multiplayer.test.js tests/result-display.test.js tests/disconnect.test.js"},
   "engines": {"node": ">=22"}
 }

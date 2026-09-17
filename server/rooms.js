@@ -15,10 +15,11 @@ function normalizeNickname(value) {
 }
 
 class Rooms {
-  constructor({clock = Date.now, turnMs = 60000, idleMs = 12 * 60 * 60 * 1000} = {}) {
+  constructor({clock = Date.now, turnMs = 60000, disconnectMs = 20000, idleMs = 12 * 60 * 60 * 1000} = {}) {
     this.rooms = new Map();
     this.clock = clock;
     this.turnMs = turnMs;
+    this.disconnectMs = disconnectMs;
     this.idleMs = idleMs;
   }
   create(count, nickname) {
@@ -54,14 +55,42 @@ class Rooms {
     const room = this.get(code);
     const member = room.members.find(m => m.token === token);
     if (!member) fail('참가 세션이 올바르지 않습니다.', 401);
-    member.lastSeen = room.touched = this.clock();
     this.tick(room);
+    member.lastSeen = room.touched = this.clock();
     return {room, member};
   }
   setDeadline(room) {
     room.deadline = room.game && !room.game.finished ? this.clock() + this.turnMs : null;
   }
   tick(room) {
+    const game = room.game;
+    if (game) {
+      for (const member of room.members) {
+        if (!member.retired && this.clock() - member.lastSeen >= this.disconnectMs) {
+          member.retired = true;
+          game.players[member.id].retired = true;
+          game.log(`${member.name}: 연결 종료 · 다음 행동에서 Fold, 이후 핸드 리타이어`);
+          room.revision++;
+        }
+      }
+      if (room.members[room.host].retired) {
+        const successor = room.members.find(member => !member.retired);
+        if (successor) {
+          room.host = successor.id;
+          game.log(`${successor.name}: 방장 권한 인계`);
+          room.revision++;
+        }
+      }
+      if (!game.finished && game.players[game.actor].retired) {
+        game.act('fold');
+        room.revision++;
+        this.setDeadline(room);
+      }
+      if (game.finished) {
+        const remaining = game.players.filter(player => !player.retired && player.chips > 0);
+        game.champion = remaining.length === 1 ? remaining[0].id : null;
+      }
+    }
     if (room.deadline !== null && this.clock() >= room.deadline && !room.game.finished) {
       const game = room.game;
       game.log(`${game.players[game.actor].name}: 시간 초과 (자동 Check/Fold)`);
@@ -77,6 +106,7 @@ class Rooms {
     }
   }
   command(room, member, body) {
+    if (member.retired) fail('이미 리타이어한 좌석입니다. 새 방에서 다시 참가하세요.', 403);
     if (body.revision !== room.revision) fail('상태가 변경되었습니다. 최신 화면에서 다시 선택하세요.', 409);
     const game = room.game;
     if (['start', 'next', 'reset'].includes(body.command)) {
@@ -85,11 +115,12 @@ class Rooms {
         if (game || room.members.length !== room.count) fail('모든 참가자가 입장한 뒤 시작하세요.');
         room.game = new Holdem.Game(room.count, {random: secureRandom, names: room.members.map(member => member.name)});
       } else if (body.command === 'next') {
-        if (!game || !game.finished || game.champion !== null) fail('다음 핸드를 시작할 수 없습니다.');
+        if (!game || !game.finished || game.players.filter(p => !p.retired && p.chips > 0).length < 2) fail('다음 핸드를 시작할 수 없습니다.');
         game.nextHand();
       } else {
         if (!game || !game.finished) fail('핸드 종료 후에만 새 게임을 시작할 수 있습니다.');
-        room.game = new Holdem.Game(room.count, {random: secureRandom, names: room.members.map(member => member.name)});
+        if (room.members.filter(member => !member.retired).length < 2) fail('새 게임에는 남은 참가자가 2명 이상 필요합니다.');
+        room.game = new Holdem.Game(room.count, {random: secureRandom, names: room.members.map(member => member.name), retired: room.members.map(member => member.retired)});
       }
     } else if (body.command === 'act') {
       if (!game || game.finished || game.actor !== member.id) fail('자신의 턴에만 행동할 수 있습니다.', 403);
@@ -98,6 +129,7 @@ class Rooms {
     } else fail('지원하지 않는 명령입니다.');
     room.revision++;
     this.setDeadline(room);
+    this.tick(room);
     // Bound history in long-running rooms; current hand history is retained in normal play.
     if (room.game.logs.length > 1000) room.game.logs = room.game.logs.slice(-1000);
   }
@@ -106,7 +138,8 @@ class Rooms {
     const state = {
       code: room.code, count: room.count, you: member.id, host: room.host,
       revision: room.revision, deadline: room.deadline, serverTime: this.clock(),
-      members: room.members.map(m => ({id: m.id, name: m.name, online: this.clock() - m.lastSeen < 10000})),
+      members: room.members.map(m => ({id: m.id, name: m.name, retired: Boolean(m.retired), online: !m.retired && this.clock() - m.lastSeen < 10000})),
+      canReset: room.members.filter(m => !m.retired).length >= 2,
       game: null
     };
     if (!g) return state;
@@ -115,11 +148,12 @@ class Rooms {
       phase: g.phase, handNumber: g.handNumber, board: g.board, pot: g.pot,
       currentBet: g.currentBet, dealer: g.dealer, smallBlind: g.smallBlind, bigBlind: g.bigBlind,
       actor: g.actor, finished: g.finished, champion: g.champion, awardedPot: g.awardedPot,
+      tournamentOver: g.finished && g.players.filter(p => !p.retired && p.chips > 0).length < 2,
       showdown: Boolean(g.finished && g.showdown), results: g.results, logs: g.logs.slice(-250),
-      legal: member.id === g.actor && !g.finished ? g.legalActions() : null,
+      legal: !member.retired && member.id === g.actor && !g.finished ? g.legalActions() : null,
       players: g.players.map(p => {
         const publicHand = Boolean(g.finished && g.showdown && p.inHand && !p.folded);
-        return {id: p.id, name: p.name, chips: p.chips, inHand: p.inHand,
+        return {id: p.id, name: p.name, chips: p.chips, inHand: p.inHand, retired: Boolean(p.retired),
           folded: p.folded, allIn: p.allIn, streetBet: p.streetBet, totalBet: p.totalBet,
           lastAction: p.lastAction, cards: p.id === member.id || publicHand ? p.cards : [],
           hand: publicHand ? p.hand : null};

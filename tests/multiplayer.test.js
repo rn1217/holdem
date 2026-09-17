@@ -60,7 +60,7 @@ test('Folded hole cards remain secret even after showdown',()=>{
   assert.equal(t.view(0).game.players[0].cards.length,2);
 });
 test('Timeout auto-fold/check; same token reconnects to same seat; idle rooms expire',()=>{
-  let now=0;const t=table(2,{clock:()=>now,turnMs:60000,idleMs:1000000});t.send(0,'start');
+  let now=0;const t=table(2,{clock:()=>now,turnMs:60000,disconnectMs:2000000,idleMs:1000000});t.send(0,'start');
   const token=t.sessions[0].token;now=61000;t.rooms.sweep();assert(t.room.game.finished);assert(t.room.game.players[0].folded);
   const recovered=t.rooms.authenticate(t.room.code,token);assert.equal(recovered.member.id,0);assert(t.view(0).game.finished);
   t.send(0,'next');t.send(t.room.game.actor,'act',{action:'call'});

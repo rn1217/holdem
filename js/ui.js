@@ -219,8 +219,9 @@
       const labels=[];
       if(p.id===g.dealer) labels.push('D · DEALER');if(p.id===g.smallBlind) labels.push('SB');if(p.id===g.bigBlind) labels.push('BB');
       if(p.id===g.actor) labels.push('현재 턴');if(p.folded) labels.push('FOLD');if(p.allIn&&!g.finished) labels.push('ALL-IN');
-      if(!p.inHand||(g.finished&&p.chips===0)) labels.push('탈락');
-      if(!state.members.find(m=>m.id===p.id)?.online) labels.push('연결 끊김');
+      if(p.retired) labels.push('리타이어');
+      else if(!p.inHand||(g.finished&&p.chips===0)) labels.push('탈락');
+      if(!p.retired&&!state.members.find(m=>m.id===p.id)?.online) labels.push('연결 끊김');
       labels.forEach(label=>line(badges,label,'span').className='badge');
       line(el,p.lastAction||'대기 중','div').className='last-action';return el;
     }));
@@ -229,8 +230,9 @@
     $('#hide-cards').hidden=!me.cards.length;$('#hide-cards').textContent=hide?'내 카드 보기':'내 카드 숨기기';
     $('#turn-title').textContent=g.finished?(g.champion!==null?`${playerName(g,g.champion)} 최종 우승!`:'핸드가 끝났습니다'):g.actor===state.you?'내 차례입니다':`${playerName(g,g.actor)}의 차례를 기다리는 중`;
     $('#controls').hidden=!g.legal;
-    $('#next-hand').hidden=!g.finished||g.champion!==null||state.you!==state.host;
-    $('#new-game').hidden=!g.finished||state.you!==state.host;
+    if(me.retired) $('#turn-title').textContent='리타이어 처리되었습니다 · 새 방에서 다시 참가하세요';
+    $('#next-hand').hidden=!g.finished||g.champion!==null||g.tournamentOver||state.you!==state.host;
+    $('#new-game').hidden=!g.finished||state.you!==state.host||state.canReset===false;
     $('#next-hand').disabled=$('#new-game').disabled=busy||!connected;
     if(g.legal) {
       const l=g.legal,off=busy||!connected;
