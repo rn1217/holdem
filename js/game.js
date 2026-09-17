@@ -46,7 +46,7 @@
       this.smallBlind = this.contenders.length === 2 ? this.dealer : this.nextSeat(this.dealer, active);
       this.bigBlind = this.nextSeat(this.smallBlind, active);
       this.log(`— Hand ${this.handNumber} · Dealer: ${this.players[this.dealer].name} —`);
-      for (const [seat, amount, label] of [[this.smallBlind, 100, 'Small Blind'], [this.bigBlind, 200, 'Big Blind']]) {
+      for (const [seat, amount, label] of [[this.smallBlind, 200, 'Small Blind'], [this.bigBlind, 400, 'Big Blind']]) {
         const p = this.players[seat];
         const paid = this.pay(p, amount);
         p.lastAction = `${label} ${paid}${p.allIn ? ' · All-In' : ''}`;
@@ -57,8 +57,8 @@
         seat = this.nextSeat(seat, active);
         this.players[seat].cards.push(Holdem.draw(this.deck));
       }
-      this.currentBet = 200; // A short big blind does not reduce the pre-flop bring-in.
-      this.minRaise = 200;
+      this.currentBet = 400; // A short big blind does not reduce the pre-flop bring-in.
+      this.minRaise = 400;
       this.pending = new Set(this.contenders.filter(p => !p.allIn).map(p => p.id));
       this.resolve(this.bigBlind);
     }
@@ -132,7 +132,7 @@
       for (let i = 0; i < count; i++) this.board.push(Holdem.draw(this.deck));
       this.log(`${this.phase}: ${this.board.map(Holdem.cardText).join(' ')}`);
       this.currentBet = 0;
-      this.minRaise = 200;
+      this.minRaise = 400;
       this.players.forEach(p => { p.streetBet = 0; p.actedAt = null; });
       this.pending = new Set(this.contenders.filter(p => !p.allIn).map(p => p.id));
       if (this.pending.size < 2) this.pending.clear();
