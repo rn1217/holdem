@@ -62,15 +62,19 @@ class Rooms {
   setDeadline(room) {
     room.deadline = room.game && !room.game.finished ? this.clock() + this.turnMs : null;
   }
+  resign(room, member, reason) {
+    if (member.retired) return;
+    member.retired = true;
+    room.game.players[member.id].retired = true;
+    room.game.log(`${member.name}: ${reason} · 기권 처리 (이후 핸드 제외)`);
+    room.revision++;
+  }
   tick(room) {
     const game = room.game;
     if (game) {
       for (const member of room.members) {
         if (!member.retired && this.clock() - member.lastSeen >= this.disconnectMs) {
-          member.retired = true;
-          game.players[member.id].retired = true;
-          game.log(`${member.name}: 연결 종료 · 다음 행동에서 Fold, 이후 핸드 리타이어`);
-          room.revision++;
+          this.resign(room, member, '연결 종료');
         }
       }
       if (room.members[room.host].retired) {
@@ -106,7 +110,7 @@ class Rooms {
     }
   }
   command(room, member, body) {
-    if (member.retired) fail('이미 리타이어한 좌석입니다. 새 방에서 다시 참가하세요.', 403);
+    if (member.retired) fail('이미 기권한 좌석입니다. 새 방에서 다시 참가하세요.', 403);
     if (body.revision !== room.revision) fail('상태가 변경되었습니다. 최신 화면에서 다시 선택하세요.', 409);
     const game = room.game;
     if (['start', 'next', 'reset'].includes(body.command)) {
@@ -122,13 +126,16 @@ class Rooms {
         if (room.members.filter(member => !member.retired).length < 2) fail('새 게임에는 남은 참가자가 2명 이상 필요합니다.');
         room.game = new Holdem.Game(room.count, {random: secureRandom, names: room.members.map(member => member.name), retired: room.members.map(member => member.retired)});
       }
+    } else if (body.command === 'resign') {
+      if (!game) fail('게임 시작 후 기권할 수 있습니다.');
+      this.resign(room, member, '직접 기권');
     } else if (body.command === 'act') {
       if (!game || game.finished || game.actor !== member.id) fail('자신의 턴에만 행동할 수 있습니다.', 403);
       if (body.action === 'raise' && !Number.isSafeInteger(body.amount)) fail('Raise 금액은 정수여야 합니다.');
       game.act(body.action, body.amount);
     } else fail('지원하지 않는 명령입니다.');
     room.revision++;
-    this.setDeadline(room);
+    if (body.command !== 'resign') this.setDeadline(room);
     this.tick(room);
     // Bound history in long-running rooms; current hand history is retained in normal play.
     if (room.game.logs.length > 1000) room.game.logs = room.game.logs.slice(-1000);

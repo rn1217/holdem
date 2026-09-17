@@ -48,7 +48,7 @@ test('Disconnected future actor folds on its next action, then blinds skip it', 
 test('Retirement stays permanent across reconnect and reset', () => {
   const t = table();t.at(20001,[0,2]);
   const {member} = t.rooms.authenticate(t.room.code,t.room.members[1].token);
-  assert(member.retired);assert.throws(()=>t.send(1,'act',{action:'call'}),/리타이어/);
+  assert(member.retired);assert.throws(()=>t.send(1,'act',{action:'call'}),/기권/);
   finish(t);t.send(0,'reset');
   assert(t.room.game.players[1].retired);assert(!t.room.game.players[1].inHand);
   assert.equal(t.room.game.players[1].cards.length,0);
@@ -76,4 +76,28 @@ test('Disconnect between hands excludes the player before the next deal', () => 
   const t=table();finish(t);t.at(20001,[1,2]);t.send(1,'next');
   assert.equal(t.room.host,1);assert(!t.room.game.players[0].inHand);
   assert.equal(t.room.game.players[0].cards.length,0);assert.equal(t.total(),30000);
+});
+test('Manual surrender on current turn folds, transfers host and cannot rejoin', () => {
+  const t=table();t.send(0,'resign');
+  assert(t.room.members[0].retired);assert(t.room.game.players[0].folded);
+  assert.equal(t.room.host,1);assert.equal(t.total(),30000);
+  assert.throws(()=>t.send(0,'resign'),/기권/);
+  assert.throws(()=>t.send(0,'act',{action:'call'}),/기권/);
+  assert(t.room.game.logs.some(log=>log.includes('직접 기권')));
+});
+test('Surrender off-turn preserves actor deadline and folds on the next action', () => {
+  const t=table();t.at(5000,[0,1,2]);const deadline=t.room.deadline;
+  t.send(1,'resign');assert.equal(t.room.deadline,deadline);
+  assert.equal(t.room.game.actor,0);assert(!t.room.game.players[1].folded);
+  t.send(0,'act',{action:'call'});assert(t.room.game.players[1].folded);
+  assert.equal(t.room.game.actor,2);assert.equal(t.total(),30000);
+});
+test('All-in surrender keeps this pot eligibility but is excluded after settlement', () => {
+  const t=table();t.send(0,'act',{action:'allin'});t.send(0,'resign');
+  assert(t.room.game.players[0].retired);assert(!t.room.game.players[0].folded);
+  finish(t);assert.equal(t.total(),30000);
+  const g=t.room.game;
+  if(g.players.filter(p=>!p.retired&&p.chips>0).length>=2) {
+    t.send(t.room.host,'next');assert.equal(g.players[0].cards.length,0);
+  }
 });

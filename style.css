@@ -67,3 +67,9 @@
 .nickname-field small { color: var(--muted); font-size: 11px; }
 #nickname-help { display: block; margin-top: 6px; }
 .player h3, #turn-title, #winner-title, .winner-payout, #room-info, #lobby-members, #action-notice-player { overflow-wrap: anywhere; }
+/* A separated page-bottom action, away from the betting controls. */
+.resign-corner { max-width: 1440px; margin: 12px auto 0; padding: 12px 36px 28px; text-align: right; }
+#resign-open { color: #ba9b9b; font-size: 12px; padding: 9px 14px; }
+.resign-choices { display: flex; gap: 12px; margin-top: 24px; }
+.resign-choices button { flex: 1; }
+@media(max-width:540px) { .resign-corner { padding: 12px 16px 24px; } }
