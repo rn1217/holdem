@@ -66,7 +66,8 @@ class Rooms {
     if (member.retired) return;
     member.retired = true;
     room.game.players[member.id].retired = true;
-    room.game.log(`${member.name}: ${reason} · 기권 처리 (이후 핸드 제외)`);
+    room.game.forfeitRetiredChips();
+    room.game.log(`${member.name}: ${reason} · 기권 패배 (보유 칩 0, 이후 핸드 제외)`);
     room.revision++;
   }
   tick(room) {
@@ -89,6 +90,23 @@ class Rooms {
         game.act('fold');
         room.revision++;
         this.setDeadline(room);
+      }
+      // If nobody can oppose the sole remaining player, finish without waiting
+      // for that player to click. Already committed all-ins still get settled normally.
+      if (!game.finished) {
+        const remaining = game.contenders.filter(player => !player.retired);
+        const surrendered = game.contenders.filter(player => player.retired);
+        if (remaining.length === 1 && surrendered.length && surrendered.every(player => !player.allIn)) {
+          for (const player of surrendered) {
+            player.folded = true;
+            player.lastAction = 'Fold';
+            game.pending.delete(player.id);
+            game.log(`${player.name}: Fold`);
+          }
+          game.settle(false);
+          room.revision++;
+          this.setDeadline(room);
+        }
       }
       if (game.finished) {
         const remaining = game.players.filter(player => !player.retired && player.chips > 0);

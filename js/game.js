@@ -4,6 +4,8 @@
       if (![2, 3, 4].includes(count)) throw new Error('2~4명을 선택하세요.');
       this.random = options.random || Math.random;
       this.players = Array.from({length: count}, (_, id) => ({id, name: options.names?.[id] || `Player ${id + 1}`, chips: 10000, retired: Boolean(options.retired?.[id])}));
+      this.forfeitedChips = 0;
+      this.forfeitRetiredChips();
       this.dealer = -1;
       this.handNumber = 0;
       this.logs = [];
@@ -12,6 +14,15 @@
       this.nextHand();
     }
     log(message) { this.logs.push(message); }
+    forfeitRetiredChips() {
+      // Unbet chips are removed, not awarded to another player or added to a pot.
+      for (const player of this.players) {
+        if (player.retired) {
+          this.forfeitedChips += player.chips;
+          player.chips = 0;
+        }
+      }
+    }
     nextSeat(from, predicate) {
       for (let offset = 1; offset <= this.players.length; offset++) {
         const index = (from + offset + this.players.length) % this.players.length;
@@ -46,7 +57,7 @@
       this.smallBlind = this.contenders.length === 2 ? this.dealer : this.nextSeat(this.dealer, active);
       this.bigBlind = this.nextSeat(this.smallBlind, active);
       this.log(`— Hand ${this.handNumber} · Dealer: ${this.players[this.dealer].name} —`);
-      for (const [seat, amount, label] of [[this.smallBlind, 200, 'Small Blind'], [this.bigBlind, 400, 'Big Blind']]) {
+      for (const [seat, amount, label] of [[this.smallBlind, 100, 'Small Blind'], [this.bigBlind, 200, 'Big Blind']]) {
         const p = this.players[seat];
         const paid = this.pay(p, amount);
         p.lastAction = `${label} ${paid}${p.allIn ? ' · All-In' : ''}`;
@@ -57,8 +68,8 @@
         seat = this.nextSeat(seat, active);
         this.players[seat].cards.push(Holdem.draw(this.deck));
       }
-      this.currentBet = 400; // A short big blind does not reduce the pre-flop bring-in.
-      this.minRaise = 400;
+      this.currentBet = 200; // A short big blind does not reduce the pre-flop bring-in.
+      this.minRaise = 200;
       this.pending = new Set(this.contenders.filter(p => !p.allIn).map(p => p.id));
       this.resolve(this.bigBlind);
     }
@@ -132,7 +143,7 @@
       for (let i = 0; i < count; i++) this.board.push(Holdem.draw(this.deck));
       this.log(`${this.phase}: ${this.board.map(Holdem.cardText).join(' ')}`);
       this.currentBet = 0;
-      this.minRaise = 400;
+      this.minRaise = 200;
       this.players.forEach(p => { p.streetBet = 0; p.actedAt = null; });
       this.pending = new Set(this.contenders.filter(p => !p.allIn).map(p => p.id));
       if (this.pending.size < 2) this.pending.clear();
@@ -181,6 +192,7 @@
         this.results.push({amount, winners: winners.map(p => p.id), name, refund: false});
       }
       this.players.forEach(p => { p.totalBet = 0; });
+      this.forfeitRetiredChips();
       const remaining = this.players.filter(p => p.chips > 0 && !p.retired);
       this.champion = remaining.length === 1 ? remaining[0].id : null;
     }

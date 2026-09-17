@@ -12,7 +12,7 @@ function table(count = 3) {
   send(0, 'start');
   return {rooms, room, send,
     at(time, connected) { now = time; connected.forEach(id => {room.members[id].lastSeen = now;}); rooms.sweep(); },
-    total() {return room.game.pot + room.game.players.reduce((sum,p) => sum+p.chips, 0);}
+    total() {return room.game.pot + room.game.forfeitedChips + room.game.players.reduce((sum,p) => sum+p.chips, 0);}
   };
 }
 function finish(t) {
@@ -80,6 +80,7 @@ test('Disconnect between hands excludes the player before the next deal', () => 
 test('Manual surrender on current turn folds, transfers host and cannot rejoin', () => {
   const t=table();t.send(0,'resign');
   assert(t.room.members[0].retired);assert(t.room.game.players[0].folded);
+  assert.equal(t.room.game.players[0].chips,0);
   assert.equal(t.room.host,1);assert.equal(t.total(),30000);
   assert.throws(()=>t.send(0,'resign'),/기권/);
   assert.throws(()=>t.send(0,'act',{action:'call'}),/기권/);
@@ -96,8 +97,29 @@ test('All-in surrender keeps this pot eligibility but is excluded after settleme
   const t=table();t.send(0,'act',{action:'allin'});t.send(0,'resign');
   assert(t.room.game.players[0].retired);assert(!t.room.game.players[0].folded);
   finish(t);assert.equal(t.total(),30000);
+  assert.equal(t.room.game.players[0].chips,0);
   const g=t.room.game;
   if(g.players.filter(p=>!p.retired&&p.chips>0).length>=2) {
     t.send(t.room.host,'next');assert.equal(g.players[0].cards.length,0);
   }
+});
+test('Off-turn heads-up surrender immediately crowns the remaining player', () => {
+  const t=table(2);assert.equal(t.room.game.actor,0);
+  t.send(1,'resign');
+  assert(t.room.game.finished);assert.equal(t.room.game.champion,0);
+  assert.equal(t.room.game.players[1].chips,0);
+  assert.equal(t.room.game.players[0].chips,10100);
+  assert.equal(t.room.game.forfeitedChips,9900);
+  assert.equal(t.total(),20000);
+});
+test('Surrender after a completed hand announces a new champion and zero chips', () => {
+  const t=table(2);finish(t);assert.equal(t.room.game.champion,null);
+  const revision=t.room.revision;t.send(1,'resign');
+  assert.equal(t.room.game.champion,0);assert.equal(t.room.game.players[1].chips,0);
+  assert(t.room.revision>revision);assert.equal(t.total(),20000);
+});
+test('Retired seats keep zero chips after reset', () => {
+  const t=table(3);t.send(1,'resign');finish(t);t.send(0,'reset');
+  assert.equal(t.room.game.players[1].chips,0);
+  assert(!t.room.game.players[1].inHand);
 });

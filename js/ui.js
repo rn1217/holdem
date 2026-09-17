@@ -55,6 +55,7 @@
     // Round each pot separately before adding payouts, preserving odd-chip rules.
     for (const pot of winningPots(game)) {
       for (const payout of pot.winners) {
+        if (payout.player.retired) continue; // Surrendered players remain defeated with zero chips.
         if (!winners.has(payout.player.id)) {
           winners.set(payout.player.id, {player: payout.player, chips: 0, name: pot.name, pots: []});
         }
@@ -72,10 +73,15 @@
     const winners = winningPlayers(game);
     const winnerIds = winners.map(winner => winner.player.id);
     $('#winner-title').textContent = game.champion !== null ? `${playerName(game, game.champion)} 최종 우승!`
-      : winnerIds.length === 1 ? `${playerName(game, winnerIds[0])} 승리!` : '이번 핸드의 승자';
+      : winnerIds.length === 1 ? `${playerName(game, winnerIds[0])} 승리!` : winnerIds.length ? '이번 핸드의 승자' : '핸드 종료';
     const details = $('#winner-details');
     details.replaceChildren();
-    for (const winner of winners) {
+    if (!winners.length && !game.finalVictoryOnly) line(details, '기권한 참가자의 정산 금액은 소멸합니다. 기권은 패배로 처리됩니다.', 'p');
+    if (game.finalVictoryOnly) {
+      line(details, '다른 참가자의 기권으로 최종 우승했습니다.', 'h3').className = 'winner-hand-name';
+      line(details, `보유 칩 ${format(game.players.find(player => player.id === game.champion).chips)} Chip`, 'p').className = 'winner-payout';
+    }
+    for (const winner of game.finalVictoryOnly ? [] : winners) {
       const section = document.createElement('section');
       section.className = 'winner-pot';
       line(section, winner.pots.map(pot => `${pot.label} ${format(pot.chips)} Chip${pot.tied ? ' (분할)' : ''}`).join(' · '), 'p').className = 'winner-pot-label';
@@ -91,7 +97,7 @@
       }
       details.append(section);
     }
-    line(details, '표시된 획득 칩은 본인이 베팅한 금액을 포함합니다. 미콜 금액 반환은 테이블 결과에서 확인할 수 있습니다.', 'p').className = 'winner-footnote';
+    if (!game.finalVictoryOnly) line(details, '표시된 획득 칩은 본인이 베팅한 금액을 포함합니다. 기권한 참가자의 정산 금액은 소멸하며, 반환 내역은 테이블 결과에서 확인할 수 있습니다.', 'p').className = 'winner-footnote';
     $('#winner-dialog').showModal();
     $('#winner-close').focus();
   }
@@ -160,12 +166,15 @@
       showNextActionNotice();
     }
     const justFinished = currentGame?.finished && (!continuingHand || !previousGame.finished);
-    if (justFinished) waitingForResult = true;
+    const finalVictory = continuingHand && previousGame.finished && currentGame.finished &&
+      currentGame.champion !== null && currentGame.champion !== previousGame.champion;
+    if (finalVictory) { clearActionNotices(); clearWinner(); }
+    if (justFinished || finalVictory) waitingForResult = true;
     state=data; offset=data.serverTime-Date.now(); connected=true;
     if ($('#setup').open) $('#setup').close();
     render();
-    if (justFinished) {
-      pendingWinner = currentGame;
+    if (justFinished || finalVictory) {
+      pendingWinner = finalVictory ? {...currentGame, finalVictoryOnly: true, showdown: false} : currentGame;
       showNextActionNotice();
     }
   }
@@ -224,7 +233,7 @@
       const labels=[];
       if(p.id===g.dealer) labels.push('D · DEALER');if(p.id===g.smallBlind) labels.push('SB');if(p.id===g.bigBlind) labels.push('BB');
       if(p.id===g.actor) labels.push('현재 턴');if(p.folded) labels.push('FOLD');if(p.allIn&&!g.finished) labels.push('ALL-IN');
-      if(p.retired) labels.push('기권');
+      if(p.retired) labels.push('기권 · 패배');
       else if(!p.inHand||(g.finished&&p.chips===0)) labels.push('탈락');
       if(!p.retired&&!state.members.find(m=>m.id===p.id)?.online) labels.push('연결 끊김');
       labels.forEach(label=>line(badges,label,'span').className='badge');
@@ -235,7 +244,7 @@
     $('#hide-cards').hidden=!me.cards.length;$('#hide-cards').textContent=hide?'내 카드 보기':'내 카드 숨기기';
     $('#turn-title').textContent=g.finished?(g.champion!==null?`${playerName(g,g.champion)} 최종 우승!`:'핸드가 끝났습니다'):g.actor===state.you?'내 차례입니다':`${playerName(g,g.actor)}의 차례를 기다리는 중`;
     $('#controls').hidden=!g.legal;
-    if(me.retired) $('#turn-title').textContent='기권 처리되었습니다 · 이 방에는 복귀할 수 없습니다';
+    if(me.retired) $('#turn-title').textContent='기권 패배 · 보유 칩 0 · 이 방에는 복귀할 수 없습니다';
     $('#next-hand').hidden=!g.finished||g.champion!==null||g.tournamentOver||state.you!==state.host;
     $('#new-game').hidden=!g.finished||state.you!==state.host||state.canReset===false;
     $('#next-hand').disabled=$('#new-game').disabled=busy||!connected;
